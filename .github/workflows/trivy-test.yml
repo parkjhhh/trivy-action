@@ -1,0 +1,37 @@
+name: Trivy Security Scan
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  trivy-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Scan Docker image for critical vulnerabilities
+        id: vuln
+        continue-on-error: true
+        run: |
+          docker build -t trivy-test-image .
+          trivy image --exit-code 1 --severity CRITICAL trivy-test-image
+
+      - name: Scan project files for secrets
+        id: secret
+        continue-on-error: true
+        run: |
+          trivy fs --exit-code 1 --severity HIGH,CRITICAL --scanners secret . 
+
+      - name: Fail if any previous step failed
+        if: steps.vuln.outcome == 'failure' || steps.secret.outcome == 'failure'
+        run: |
+          echo "At least one security check failed."
+          exit 1
+
